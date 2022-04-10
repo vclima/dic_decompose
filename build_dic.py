@@ -3,6 +3,8 @@ from timeit import default_timer as timer
 import numpy as np
 from rpca import pcp,solve_proj
 from scipy.sparse.linalg import svds
+import matplotlib.pyplot as plt
+import datetime
 
 
 class background:
@@ -21,7 +23,7 @@ class background:
         Capture(): Capture images from background during BGBuildPeriod hours at each BuidRate minutes
         Dic(tol): Create the RPCA-based dictionary with tol tolerance '''
 
-    def __init__(self,BGBuildPeriod=24,BuildRate=10,fastAcq=False,scalingFactor=1):
+    def __init__(self,BGBuildPeriod=24,BuildRate=5,fastAcq=False,scalingFactor=1, prevCap=None):
         self.BGBuildPeriod=BGBuildPeriod
         self.BuildRate=BuildRate
         self.fastAcq=fastAcq
@@ -32,8 +34,12 @@ class background:
 
         self.Width=int(640*scalingFactor)
         self.Length=int(480*scalingFactor)
+        
+        if prevCap is None:
+            self.BG_Images=self.Capture(scalingFactor)
+        else:
+            self.BG_Images=prevCap
 
-        self.BG_Images=self.Capture(scalingFactor)
         self.BGDic=self.Dic(tol=1e-3)
 
         
@@ -41,8 +47,8 @@ class background:
     def Capture(self,scaling):
         
         cam=cv2.VideoCapture(0)
-        cam.set(2,self.Width)
-        cam.set(3,self.Length)
+        #cam.set(2,self.Width)
+        #cam.set(3,self.Length)
 
         
 
@@ -56,34 +62,40 @@ class background:
         capture=np.zeros((self.Width*self.Length,dim))
         capturePosition=0
 
-        start=-3
+        start=-1e3
         while True:
             ret,frame=cam.read()
+            frame=cv2.resize(frame, None, fx=scaling, fy=scaling, interpolation=cv2.INTER_AREA)
+            frame=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frame=cv2.normalize(frame, None, 1.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            cv2.imshow('Capture Feed',frame)
             end=timer()
 
             if(end-start)>frame_interval:
-                frame=cv2.resize(frame, None, fx=scaling, fy=scaling, interpolation=cv2.INTER_AREA)
-                frame=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                frame=cv2.normalize(frame, None, 1.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
-                cv2.imshow('Capture Feed',frame)
                 frameArray=np.array(frame).reshape((self.Width*self.Length,1))
                 capture[:,capturePosition]=frameArray[:,0]
                 capturePosition=capturePosition+1
+                if not self.fastAcq:
+                    with open('BG.npy', 'wb') as f:
+                        np.save(f, capture)
+                now = datetime.datetime.now()
+                print (str(capturePosition)+': '+now.strftime("%Y-%m-%d %H:%M:%S"))
                 if(capturePosition>=dim):
                     break
-                print(capturePosition)
                 start=timer()
             
             key = cv2.waitKey(10)
             if key == 27:
-                break
+                break 
 
         cv2.destroyAllWindows() 
         cv2.VideoCapture(0).release()
         return capture
 
     def Dic(self,tol=1e-3):
-        L,S,k,r=pcp(self.BG_Images,tol=tol)
+        #L,S,k,r=pcp(self.BG_Images,tol=tol)
+        L=np.load('L_sol.npy')
+        r=np.linalg.matrix_rank(L)
         self.BG_Images=None
 
         #U,sig,V = np.linalg.svd(L-np.mean(L),full_matrices=False)
@@ -92,6 +104,12 @@ class background:
 
         self.lambda1 = 1.0/np.sqrt(m)/np.mean(sigma) 
         self.lambda2 = 1.0/np.sqrt(m) # 0.05 
+
+        with open('L.npy', 'wb') as f:
+            np.save(f, L)
+
+        with open('dic.npy', 'wb') as f:
+            np.save(f, U)
 
         print("Rank: "+str(r))
         
@@ -130,16 +148,34 @@ class background:
     
 if __name__ == '__main__':
     scaling=0.5
-    frame_interval=0.1
+    frame_interval=0.05
+    plot_time=5
+    bgcap=np.load('BG_24_nub.npy')
 
-    BG=background(5,1/60,True,scalingFactor=scaling)
+    BG=background(scalingFactor=scaling,prevCap=bgcap)
 
     cam=cv2.VideoCapture(0)
 
+
+    vec_size=int(plot_time/frame_interval)
+    en_vec=np.zeros(vec_size)
+    mov_avg=np.zeros(vec_size)
+    ker_size=10
+    avg_ker=np.ones(ker_size)/ker_size
+
+
+    i=0
     start=-3
+    plt.ion()
+    fig=plt.figure()
+    ax = fig.add_subplot(111)
+    line1, = ax.plot(en_vec[ker_size-1:], 'b-')
+    line2, = ax.plot(mov_avg[ker_size-1:], 'r-')
+    plt.ylim([100, 200])
     while True:
         ret,frame=cam.read()
         end=timer()
+        
 
         if(end-start)>frame_interval:
             frame=cv2.resize(frame, None, fx=scaling, fy=scaling, interpolation=cv2.INTER_AREA)
@@ -154,8 +190,21 @@ if __name__ == '__main__':
 
             cv2.imshow('frames', vis1)
             fr1=timer()
-            print('New frame interval: '+str((fr1-start)))
-            #print(end-start)
+            #print('New frame interval: '+str((fr1-start)))
+            energy=np.linalg.norm(S)
+            if(i<vec_size):
+                en_vec[i]=energy
+                i=i+1
+            else:
+                en_vec[0:vec_size-1]=en_vec[1:vec_size]
+                en_vec[vec_size-1]=energy
+                mov_avg=np.convolve(en_vec,avg_ker,mode='valid')
+                line1.set_ydata(en_vec[ker_size-1:])
+                line2.set_ydata(mov_avg)
+                fig.canvas.draw()
+
+            #print('Anomaly energy: '+str(energy))
+            print(fr1-start)
 
             start=timer()
         
