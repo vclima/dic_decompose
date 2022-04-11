@@ -4,7 +4,7 @@ import numpy as np
 from rpca import pcp,solve_proj
 from scipy.sparse.linalg import svds
 import matplotlib.pyplot as plt
-import datetime
+from datetime import datetime
 
 
 class background:
@@ -172,6 +172,7 @@ if __name__ == '__main__':
     line1, = ax.plot(en_vec[ker_size-1:], 'b-')
     line2, = ax.plot(mov_avg[ker_size-1:], 'r-')
     plt.ylim([100, 200])
+    plt.title('Anomaly energy')
     while True:
         ret,frame=cam.read()
         end=timer()
@@ -181,6 +182,7 @@ if __name__ == '__main__':
             frame=cv2.resize(frame, None, fx=scaling, fy=scaling, interpolation=cv2.INTER_AREA)
             frame=cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             frame=cv2.normalize(frame, None, 1.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            fp=frame
             
             L,S=BG.Decompose(frame)
             #LStoc,SStoc=BG.StocDecompose(frame)
@@ -211,6 +213,18 @@ if __name__ == '__main__':
         key = cv2.waitKey(10)
         if key == 27:
             break
+        if key==70 or key==102:
+            date = datetime.now().strftime("%Y_%m_%d-%I%M%S_%p")
+            fname='./frame_'+date+'.jpg'
+            fp=cv2.normalize(fp, None, 255.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            cv2.imwrite(fname,fp)
+            fname='./S_'+date+'.jpg'
+            S=cv2.normalize(S, None, 255.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            cv2.imwrite(fname,S)
+        if key==71 or key==103:
+            fname='./energy_'+date+'.png'
+            plt.savefig(fname)
+
 
     cv2.destroyAllWindows() 
     cv2.VideoCapture(0).release()
