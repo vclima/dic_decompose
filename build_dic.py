@@ -151,6 +151,7 @@ if __name__ == '__main__':
     frame_interval=0.05
     plot_time=5
     bgcap=np.load('BG_24_nub.npy')
+    Time_measure=True
 
     BG=background(scalingFactor=scaling,prevCap=bgcap)
 
@@ -163,6 +164,9 @@ if __name__ == '__main__':
     ker_size=10
     avg_ker=np.ones(ker_size)/ker_size
 
+    stoc_time=[]
+    dic_time=[]
+    t_index=0
 
     i=0
     start=-3
@@ -184,13 +188,20 @@ if __name__ == '__main__':
             frame=cv2.normalize(frame, None, 1.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
             fp=frame
             
+            t1=timer()
             L,S=BG.Decompose(frame)
-            #LStoc,SStoc=BG.StocDecompose(frame)
+            t2=timer()
+            LStoc,SStoc=BG.StocDecompose(frame)
+            t3=timer()
+            if(Time_measure):
+                dic_time.append(t2-t1)
+                stoc_time.append(t3-t2)
+                t_index=t_index+1
             vis1 = np.concatenate((frame,L,S), axis=1)
-            #vis2= np.concatenate((frame,LStoc,SStoc), axis=1)
-            #vis = np.concatenate((vis1,vis2), axis=0)
+            vis2= np.concatenate((frame,LStoc,SStoc), axis=1)
+            vis = np.concatenate((vis1,vis2), axis=0)
 
-            cv2.imshow('frames', vis1)
+            cv2.imshow('frames', vis)
             fr1=timer()
             #print('New frame interval: '+str((fr1-start)))
             energy=np.linalg.norm(S)
@@ -210,6 +221,14 @@ if __name__ == '__main__':
 
             start=timer()
         
+        if(Time_measure and t_index==100):
+            print('Dic AVG: '+np.average(dic_time))
+            print('Dic SD: '+np.std(dic_time))
+            print('Stoc AVG: '+np.average(stoc_time))
+            print('Stoc SD: '+np.std(stoc_time))
+            break
+
+
         key = cv2.waitKey(10)
         if key == 27:
             break
@@ -224,6 +243,17 @@ if __name__ == '__main__':
         if key==71 or key==103:
             fname='./energy_'+date+'.png'
             plt.savefig(fname)
+        if key==83 or key==115:
+            date = datetime.now().strftime("%Y_%m_%d-%I%M%S_%p")
+            fname='./frame_'+date+'.jpg'
+            fp=cv2.normalize(fp, None, 255.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            cv2.imwrite(fname,fp)
+            fname='./dic_'+date+'.jpg'
+            S=cv2.normalize(S, None, 255.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            cv2.imwrite(fname,S)
+            fname='./stoc_'+date+'.jpg'
+            SStoc=cv2.normalize(SStoc, None, 255.0,0.0, cv2.NORM_MINMAX,cv2.CV_32F)
+            cv2.imwrite(fname,SStoc)
 
 
     cv2.destroyAllWindows() 
