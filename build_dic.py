@@ -170,13 +170,14 @@ if __name__ == '__main__':
 
     i=0
     start=-3
-    plt.ion()
-    fig=plt.figure()
-    ax = fig.add_subplot(111)
-    line1, = ax.plot(en_vec[ker_size-1:], 'b-')
-    line2, = ax.plot(mov_avg[ker_size-1:], 'r-')
-    plt.ylim([100, 200])
-    plt.title('Anomaly energy')
+    if not Time_measure:
+        plt.ion()
+        fig=plt.figure()
+        ax = fig.add_subplot(111)
+        line1, = ax.plot(en_vec[ker_size-1:], 'b-')
+        line2, = ax.plot(mov_avg[ker_size-1:], 'r-')
+        plt.ylim([100, 200])
+        plt.title('Anomaly energy')
     while True:
         ret,frame=cam.read()
         end=timer()
@@ -205,16 +206,18 @@ if __name__ == '__main__':
             fr1=timer()
             #print('New frame interval: '+str((fr1-start)))
             energy=np.linalg.norm(S)
-            if(i<vec_size):
-                en_vec[i]=energy
-                i=i+1
-            else:
-                en_vec[0:vec_size-1]=en_vec[1:vec_size]
-                en_vec[vec_size-1]=energy
-                mov_avg=np.convolve(en_vec,avg_ker,mode='valid')
-                line1.set_ydata(en_vec[ker_size-1:])
-                line2.set_ydata(mov_avg)
-                fig.canvas.draw()
+
+            if not Time_measure:
+                if(i<vec_size):
+                    en_vec[i]=energy
+                    i=i+1
+                else:
+                    en_vec[0:vec_size-1]=en_vec[1:vec_size]
+                    en_vec[vec_size-1]=energy
+                    mov_avg=np.convolve(en_vec,avg_ker,mode='valid')
+                    line1.set_ydata(en_vec[ker_size-1:])
+                    line2.set_ydata(mov_avg)
+                    fig.canvas.draw()
 
             #print('Anomaly energy: '+str(energy))
             print(fr1-start)
@@ -222,10 +225,10 @@ if __name__ == '__main__':
             start=timer()
         
         if(Time_measure and t_index==100):
-            print('Dic AVG: '+np.average(dic_time))
-            print('Dic SD: '+np.std(dic_time))
-            print('Stoc AVG: '+np.average(stoc_time))
-            print('Stoc SD: '+np.std(stoc_time))
+            print('Dic AVG: '+str(np.average(dic_time).round(decimals=4)))
+            print('Dic SD: '+str(np.std(dic_time).round(decimals=4)))
+            print('Stoc AVG: '+str(np.average(stoc_time).round(decimals=4)))
+            print('Stoc SD: '+str(np.std(stoc_time).round(decimals=4)))
             break
 
 
